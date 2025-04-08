@@ -1,0 +1,8 @@
+deepface
+opencv-python-headless
+pandas
+numpy
+Pillow
+streamlit
+tf-keras
+openpyxl
