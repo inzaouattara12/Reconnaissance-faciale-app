@@ -23,7 +23,7 @@ if os.path.exists(presence_file):
     presence_df = pd.read_excel(presence_file)
     already_present = set(presence_df["name"].tolist())
 else:
-    presence_df = pd.DataFrame(columns=["Nom", "Heure", "Present"])
+    presence_df = pd.DataFrame(columns=["name", "Heure", "Present"])
     already_present = set()
 
 # Interface Streamlit
@@ -117,7 +117,7 @@ with tab2:
                 if recognized_name not in already_present:
                     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     new_entry = pd.DataFrame([[recognized_name, now, "Oui"]],
-                                             columns=["Nom", "Heure", "Present"])
+                                             columns=["name", "Heure", "Present"])
                     presence_df = pd.concat([presence_df, new_entry], ignore_index=True)
                     presence_df.to_excel(presence_file, index=False)
                     already_present.add(recognized_name)
