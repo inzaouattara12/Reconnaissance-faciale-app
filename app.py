@@ -4,6 +4,7 @@ import os
 from deepface import DeepFace
 import numpy as np
 from PIL import Image
+import io
 from datetime import datetime
 
 # Créer le dossier de sauvegarde si inexistant
@@ -23,7 +24,7 @@ if os.path.exists(presence_file):
     presence_df = pd.read_excel(presence_file)
     already_present = set(presence_df["name"].tolist())
 else:
-    presence_df = pd.DataFrame(columns=["name", "Heure", "Present"])
+    presence_df = pd.DataFrame(columns=["name", "datetime", "present"])
     already_present = set()
 
 # Interface Streamlit
@@ -63,25 +64,20 @@ with tab1:
     elif choice == "Charger une photo depuis le disque":
         image_file = st.file_uploader("Téléchargez une photo", type=["jpg", "jpeg", "png"])
         if image_file:
-            # Vérification de l'extension du fichier
-            file_extension = image_file.name.split('.')[-1].lower()
-            if file_extension in ['jpg', 'jpeg', 'png']:
-                image = Image.open(image_file)
-                img_path = os.path.join(save_path, f"{name}.jpg")
-                image.save(img_path)
-                try:
-                    embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
-                    
-                    new_data = pd.DataFrame([[name] + embedding], columns=df.columns)
-                    df = pd.concat([df, new_data], ignore_index=True)
+            image = Image.open(image_file)
+            img_path = os.path.join(save_path, f"{name}.jpg")
+            image.save(img_path)
+            try:
+                embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
+                
+                new_data = pd.DataFrame([[name] + embedding], columns=df.columns)
+                df = pd.concat([df, new_data], ignore_index=True)
 
-                    df.to_csv(csv_file, index=False)
-                    st.success(f"Encodage sauvegardé pour {name} dans {csv_file}")
+                df.to_csv(csv_file, index=False)
+                st.success(f"Encodage sauvegardé pour {name} dans {csv_file}")
 
-                except Exception as e:
-                    st.error(f"Erreur lors de l'extraction des embeddings : {e}")
-            else:
-                st.error("Le fichier téléchargé doit être une image avec une extension .jpg, .jpeg ou .png.")
+            except Exception as e:
+                st.error(f"Erreur lors de l'extraction des embeddings : {e}")
 
 with tab2:
     st.header("Reconnaissance Faciale")
@@ -117,7 +113,7 @@ with tab2:
                 if recognized_name not in already_present:
                     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     new_entry = pd.DataFrame([[recognized_name, now, "Oui"]],
-                                             columns=["name", "Heure", "Present"])
+                                             columns=["Nom", "Heure", "Present"])
                     presence_df = pd.concat([presence_df, new_entry], ignore_index=True)
                     presence_df.to_excel(presence_file, index=False)
                     already_present.add(recognized_name)
