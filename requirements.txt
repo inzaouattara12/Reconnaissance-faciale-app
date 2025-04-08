@@ -1,3 +1,4 @@
+streamlit>=1.0.0
 requests>=2.27.1
 numpy>=1.14.0
 pandas>=0.23.4
@@ -5,7 +6,7 @@ gdown>=3.10.1
 tqdm>=4.30.0
 Pillow>=5.2.0
 opencv-python>=4.5.5.64
-tensorflow>=1.9.0
+tensorflow>=2.12.0
 keras>=2.2.0
 Flask>=1.1.2
 flask_cors>=4.0.1
