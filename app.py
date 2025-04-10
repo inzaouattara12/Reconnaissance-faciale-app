@@ -40,13 +40,10 @@ if os.path.exists(csv_file):
 else:
     df = pd.DataFrame(columns=["name"])
 
-presence_file = "presence.xlsx"
-if os.path.exists(presence_file):
-    presence_df = pd.read_excel(presence_file)
-    already_present = set(presence_df["name"].tolist())
-else:
-    presence_df = pd.DataFrame(columns=["name", "Heure", "Present"])
-    already_present = set()
+# Fonction pour récupérer le fichier de présence avec la date du jour
+def get_presence_file():
+    date_today = datetime.now().strftime("%Y-%m-%d")
+    return f"presence_{date_today}.xlsx"
 
 # Fonction pour supprimer tous les visages
 def delete_all_faces():
@@ -57,6 +54,13 @@ def delete_all_faces():
     if os.path.exists(csv_file):
         os.remove(csv_file)
     return "Tous les visages ont été supprimés."
+
+# Fonction pour supprimer la liste de présence
+def delete_presence():
+    presence_file = get_presence_file()
+    if os.path.exists(presence_file):
+        os.remove(presence_file)
+    return f"La liste de présence a été supprimée ({presence_file})."
 
 # Tabulation : Ajouter un visage / Reconnaissance
 tab1, tab2 = st.tabs(["➕ Ajouter un visage", "🔍 Reconnaissance"])
@@ -97,6 +101,11 @@ with tab1:
             result = delete_all_faces()
             st.success(result)
 
+        # Bouton pour supprimer la liste de présence
+        if st.button("Supprimer la liste de présence"):
+            result = delete_presence()
+            st.success(result)
+
         st.header("Ajouter une personne")
         name = st.text_input("Entrez votre nom :")
         choice = st.radio("Choisissez une méthode pour ajouter une image", 
@@ -104,7 +113,9 @@ with tab1:
 
         if choice == "Prendre une photo avec la webcam":
             image_file = st.camera_input("Prenez une photo")
-            if image_file and name:
+            if not name:
+                st.error("❌ Veuillez entrer un nom avant de prendre la photo.")
+            elif image_file and name:
                 image = Image.open(image_file).convert("RGB")
                 img_path = os.path.join(save_path, f"{name}.jpg")
                 image.save(img_path)
@@ -132,7 +143,9 @@ with tab1:
 
         elif choice == "Charger une photo depuis le disque":
             image_file = st.file_uploader("Téléchargez une photo", type=["jpg", "jpeg", "png"])
-            if image_file and name:
+            if not name:
+                st.error("❌ Veuillez entrer un nom avant de télécharger la photo.")
+            elif image_file and name:
                 image = Image.open(image_file).convert("RGB")
                 img_path = os.path.join(save_path, f"{name}.jpg")
                 image.save(img_path)
@@ -162,6 +175,16 @@ with tab1:
 with tab2:
     st.header("Reconnaissance Faciale")
     
+    # Chargement de la liste de présence
+    presence_file = get_presence_file()
+
+    # Vérifiez si le fichier de présence existe, sinon créez un dataframe vide
+    if os.path.exists(presence_file):
+        presence_df = pd.read_excel(presence_file)
+    else:
+        # Initialiser presence_df si il n'existe pas
+        presence_df = pd.DataFrame(columns=["name", "Heure", "Present"])
+
     # Affichage de la caméra
     test_image = st.camera_input("Prenez une photo pour la reconnaissance")
 
@@ -190,12 +213,13 @@ with tab2:
 
             if min_distance < 0.68:
                 st.success(f"✅ Bienvenue {recognized_name}")
-                if recognized_name not in already_present:
+                
+                # Enregistrer la présence
+                if recognized_name not in presence_df["name"].values:
                     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     new_entry = pd.DataFrame([[recognized_name, now, "Oui"]], columns=["name", "Heure", "Present"])
                     presence_df = pd.concat([presence_df, new_entry], ignore_index=True)
                     presence_df.to_excel(presence_file, index=False)
-                    already_present.add(recognized_name)
                     st.write(f"Présence enregistrée pour {recognized_name} à {now}")
                 else:
                     st.warning(f"{recognized_name} est déjà enregistré.")
@@ -216,6 +240,6 @@ with tab2:
         st.download_button(
             label="📥 Télécharger la feuille de présence",
             data=output,
-            file_name="presence.xlsx",
+            file_name=presence_file,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
