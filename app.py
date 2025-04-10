@@ -4,10 +4,10 @@ import os
 from deepface import DeepFace
 import numpy as np
 from PIL import Image
-import io
 from datetime import datetime
+import hashlib
 
-# Créer le dossier de sauvegarde si inexistant
+# Créer le dossier de sauvegarde
 save_path = "faces/"
 os.makedirs(save_path, exist_ok=True)
 
@@ -15,11 +15,9 @@ csv_file = "faces.csv"
 if os.path.exists(csv_file):
     df = pd.read_csv(csv_file)
 else:
-    df = pd.DataFrame(columns=["name"] + [f"e{i}" for i in range(2622)])  # VGG-Face size
+    df = pd.DataFrame(columns=["name"] + [f"e{i}" for i in range(2622)])
 
 presence_file = "presence.xlsx"
-
-# Charger les présences déjà enregistrées (si le fichier existe)
 if os.path.exists(presence_file):
     presence_df = pd.read_excel(presence_file)
     already_present = set(presence_df["name"].tolist())
@@ -27,64 +25,102 @@ else:
     presence_df = pd.DataFrame(columns=["name", "Heure", "Present"])
     already_present = set()
 
-# Interface Streamlit
-st.title("🎭 Système de Reconnaissance Faciale")
+# --- Authentification ---
+AUTHORIZED_USERS = {
+    "admin": hashlib.sha256("adminpass".encode()).hexdigest(),
+    "alice": hashlib.sha256("alice123".encode()).hexdigest(),
+}
 
-# Onglets : Ajouter un visage / Reconnaissance
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def check_credentials(username, password):
+    return username in AUTHORIZED_USERS and AUTHORIZED_USERS[username] == hash_password(password)
+
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+if "username" not in st.session_state:
+    st.session_state["username"] = ""
+
+# --- Interface de connexion ---
+if not st.session_state["authenticated"]:
+    st.title("🔐 Connexion requise")
+    with st.form("login_form"):
+        username = st.text_input("Nom d'utilisateur")
+        password = st.text_input("Mot de passe", type="password")
+        submitted = st.form_submit_button("Se connecter")
+
+        if submitted:
+            if check_credentials(username, password):
+                st.session_state["authenticated"] = True
+                st.session_state["username"] = username
+                st.success(f"Bienvenue, {username} 👋")
+                st.rerun()()
+            else:
+                st.error("Identifiants incorrects.")
+    st.stop()
+
+# --- Interface principale ---
+st.sidebar.success(f"Connecté en tant que : {st.session_state['username']}")
+if st.sidebar.button("🔓 Se déconnecter"):
+    st.session_state["authenticated"] = False
+    st.session_state["username"] = ""
+    st.rerun()()
+
+st.title("🎭 Système de Reconnaissance Faciale")
 tab1, tab2 = st.tabs(["➕ Ajouter un visage", "🔍 Reconnaissance"])
 
+# --- Ajouter un visage ---
 with tab1:
-    st.header("Ajouter une personne")
-    
-    name = st.text_input("Entrez votre nom :")
+    if not st.session_state["authenticated"]:
+        st.warning("Vous devez être connecté pour ajouter un visage.")
+    else:
+        st.header("Ajouter une personne")
+        name = st.text_input("Entrez votre nom :")
 
-    choice = st.radio(
-        "Choisissez une méthode pour ajouter une image",
-        ("Prendre une photo avec la webcam", "Charger une photo depuis le disque")
-    )
+        choice = st.radio(
+            "Choisissez une méthode pour ajouter une image",
+            ("Prendre une photo avec la webcam", "Charger une photo depuis le disque")
+        )
 
-    if choice == "Prendre une photo avec la webcam":
-        image_file = st.camera_input("Prenez une photo")
-        if image_file:
-            image = Image.open(image_file)
-            img_path = os.path.join(save_path, f"{name}.jpg")
-            image.save(img_path)
-            try:
-                embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
-                
-                new_data = pd.DataFrame([[name] + embedding], columns=df.columns)
-                df = pd.concat([df, new_data], ignore_index=True)
+        if choice == "Prendre une photo avec la webcam":
+            image_file = st.camera_input("Prenez une photo")
+            if image_file and name:
+                image = Image.open(image_file)
+                img_path = os.path.join(save_path, f"{name}.jpg")
+                image = image.convert("RGB")  # retire l'alpha (transparence)
+                image.save(img_path)
+                try:
+                    embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
+                    new_data = pd.DataFrame([[name] + embedding], columns=df.columns)
+                    df = pd.concat([df, new_data], ignore_index=True)
+                    df.to_csv(csv_file, index=False)
+                    st.success(f"Encodage sauvegardé pour {name} dans {csv_file}")
+                except Exception as e:
+                    st.error(f"Erreur lors de l'extraction des embeddings : {e}")
 
-                df.to_csv(csv_file, index=False)
-                st.success(f"Encodage sauvegardé pour {name} dans {csv_file}")
+        elif choice == "Charger une photo depuis le disque":
+            image_file = st.file_uploader("Téléchargez une photo", type=["jpg", "jpeg", "png"])
+            if image_file and name:
+                image = Image.open(image_file)
+                img_path = os.path.join(save_path, f"{name}.jpg")
+                image = image.convert("RGB")  # retire l'alpha (transparence)
+                image.save(img_path)
+                try:
+                    embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
+                    new_data = pd.DataFrame([[name] + embedding], columns=df.columns)
+                    df = pd.concat([df, new_data], ignore_index=True)
+                    df.to_csv(csv_file, index=False)
+                    st.success(f"Encodage sauvegardé pour {name} dans {csv_file}")
+                except Exception as e:
+                    st.error(f"Erreur lors de l'extraction des embeddings : {e}")
 
-            except Exception as e:
-                st.error(f"Erreur lors de l'extraction des embeddings : {e}")
-
-    elif choice == "Charger une photo depuis le disque":
-        image_file = st.file_uploader("Téléchargez une photo", type=["jpg", "jpeg", "png"])
-        if image_file:
-            image = Image.open(image_file)
-            img_path = os.path.join(save_path, f"{name}.jpg")
-            image.save(img_path)
-            try:
-                embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
-                
-                new_data = pd.DataFrame([[name] + embedding], columns=df.columns)
-                df = pd.concat([df, new_data], ignore_index=True)
-
-                df.to_csv(csv_file, index=False)
-                st.success(f"Encodage sauvegardé pour {name} dans {csv_file}")
-
-            except Exception as e:
-                st.error(f"Erreur lors de l'extraction des embeddings : {e}")
-
+# --- Reconnaissance faciale ---
 with tab2:
     st.header("Reconnaissance Faciale")
-
     test_image = st.camera_input("Prenez une photo pour la reconnaissance")
 
-    if test_image is not None:
+    if test_image:
         img = Image.open(test_image)
         img_path = "test.jpg"
         img.save(img_path)
