@@ -114,17 +114,13 @@ with tab1:
         if choice == "Prendre une photo avec la webcam":
             image_file = st.camera_input("Prenez une photo")
             if not name:
-                st.error("❌ Veuillez entrer un nom avant de prendre la photo.")
+                st.warning("Veuillez entrer un nom avant de prendre la photo.")
             elif image_file and name:
                 image = Image.open(image_file).convert("RGB")
                 img_path = os.path.join(save_path, f"{name}.jpg")
                 image.save(img_path)
                 try:
-                    embedding = DeepFace.represent(
-                        img_path=img_path,
-                        model_name="VGG-Face",
-                        detector_backend="mtcnn"
-                    )[0]["embedding"]
+                    embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
                     
                     # Adapter dynamiquement le nombre de colonnes
                     if df.empty:
@@ -150,11 +146,7 @@ with tab1:
                 img_path = os.path.join(save_path, f"{name}.jpg")
                 image.save(img_path)
                 try:
-                    embedding = DeepFace.represent(
-                        img_path=img_path,
-                        model_name="VGG-Face",
-                        detector_backend="mtcnn"
-                    )[0]["embedding"]
+                    embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
                     
                     # Adapter dynamiquement le nombre de colonnes
                     if df.empty:
@@ -194,11 +186,7 @@ with tab2:
         img.save(img_path)
 
         try:
-            embedding = DeepFace.represent(
-                img_path=img_path,
-                model_name="VGG-Face",
-                detector_backend="mtcnn"
-            )[0]["embedding"]
+            embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
 
             min_distance = float("inf")
             recognized_name = "Inconnu"
