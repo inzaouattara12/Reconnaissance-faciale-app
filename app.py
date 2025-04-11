@@ -17,20 +17,16 @@ AUTHORIZED_USERS = {
     "prof": hash_password("monmotdepasse"),
 }
 
-# Fonction pour vérifier la connexion
 def check_login():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
     if "username" not in st.session_state:
         st.session_state.username = ""
 
-# ---------- Application principale ----------
 st.title("🎭 Système de Reconnaissance Faciale")
 
-# Vérifier si l'utilisateur est connecté
 check_login()
 
-# Création des chemins de sauvegarde et fichiers
 save_path = "faces/"
 os.makedirs(save_path, exist_ok=True)
 
@@ -40,12 +36,10 @@ if os.path.exists(csv_file):
 else:
     df = pd.DataFrame(columns=["name"])
 
-# Fonction pour récupérer le fichier de présence avec la date du jour
 def get_presence_file():
-    date_today = datetime.now().strftime("%Y-%m-%d")
-    return f"presence_{date_today}.xlsx"
+    date_today = datetime.now().strftime("%d-%m-%Y")
+    return f"presence_du_{date_today}.xlsx"
 
-# Fonction pour supprimer tous les visages
 def delete_all_faces():
     for filename in os.listdir(save_path):
         file_path = os.path.join(save_path, filename)
@@ -55,53 +49,43 @@ def delete_all_faces():
         os.remove(csv_file)
     return "Tous les visages ont été supprimés."
 
-# Fonction pour supprimer la liste de présence
 def delete_presence():
     presence_file = get_presence_file()
     if os.path.exists(presence_file):
         os.remove(presence_file)
-    return f"La liste de présence a été supprimée ({presence_file})."
+    return f"Liste de {presence_file} a été supprimée."
 
-# Tabulation : Ajouter un visage / Reconnaissance
 tab1, tab2 = st.tabs(["➕ Ajouter un visage", "🔍 Reconnaissance"])
 
-# Onglet "Ajouter un visage" (verrouillé par connexion)
 with tab1:
     if not st.session_state.authenticated:
         st.warning("Veuillez vous connecter pour ajouter un visage.")
-        
-        # Affichage du formulaire de connexion
         login_form = st.form(key="login_form")
         username = login_form.text_input("Nom d'utilisateur", value=st.session_state.username)
         password = login_form.text_input("Mot de passe", type="password")
-
         submit_button = login_form.form_submit_button(label="Se connecter")
 
-        # Gérer la connexion après la soumission du formulaire
         if submit_button:
             if username and password:
                 if username in AUTHORIZED_USERS and hash_password(password) == AUTHORIZED_USERS[username]:
                     st.session_state.authenticated = True
-                    st.session_state.username = username  # Conserver le nom d'utilisateur
+                    st.session_state.username = username
                     st.success(f"Bienvenue {username} ! Vous êtes maintenant connecté.")
-                    st.rerun()  # Rafraîchir la page pour que la connexion soit prise en compte
+                    st.rerun()
                 else:
                     st.error("Identifiants incorrects.")
             else:
                 st.warning("Veuillez remplir tous les champs.")
     else:
-        # Afficher un bouton de déconnexion
         if st.button("Se déconnecter"):
             st.session_state.authenticated = False
             st.session_state.username = ""
             st.rerun()
 
-        # Bouton pour supprimer tous les visages
         if st.button("Supprimer tous les visages enregistrés"):
             result = delete_all_faces()
             st.success(result)
 
-        # Bouton pour supprimer la liste de présence
         if st.button("Supprimer la liste de présence"):
             result = delete_presence()
             st.success(result)
@@ -113,71 +97,68 @@ with tab1:
 
         if choice == "Prendre une photo avec la webcam":
             image_file = st.camera_input("Prenez une photo")
-            if not name:
-                st.warning("Veuillez entrer un nom avant de prendre la photo.")
-            elif image_file and name:
-                image = Image.open(image_file).convert("RGB")
-                img_path = os.path.join(save_path, f"{name}.jpg")
-                image.save(img_path)
-                try:
-                    embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
-                    
-                    # Adapter dynamiquement le nombre de colonnes
-                    if df.empty:
-                        columns = ["name"] + [f"e{i}" for i in range(len(embedding))]
-                        df = pd.DataFrame(columns=columns)
-                    
-                    new_data = pd.DataFrame([[name] + embedding], columns=df.columns)
-                    df = pd.concat([df, new_data], ignore_index=True)
-                    df.to_csv(csv_file, index=False)
-                    st.success(f"Encodage sauvegardé pour {name}")
-                except Exception as e:
-                    if 'Face could not be detected' in str(e):
-                        st.error("❌ Aucun visage détecté. Veuillez vous assurer que la photo est bien centrée sur un visage clairement visible.")
-                    else:
-                        st.error(f"Erreur lors de la reconnaissance : {e}")
+
+            if image_file:
+                if not name:
+                    st.warning("❌ Veuillez entrer un nom avant de prendre la photo.")
+                else:
+                    image = Image.open(image_file).convert("RGB")
+                    img_path = os.path.join(save_path, f"{name}.jpg")
+                    image.save(img_path)
+                    try:
+                        embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
+
+                        if df.empty:
+                            columns = ["name"] + [f"e{i}" for i in range(len(embedding))]
+                            df = pd.DataFrame(columns=columns)
+
+                        new_data = pd.DataFrame([[name] + embedding], columns=df.columns)
+                        df = pd.concat([df, new_data], ignore_index=True)
+                        df.to_csv(csv_file, index=False)
+                        st.success(f"✅ Encodage sauvegardé pour {name}")
+                    except Exception as e:
+                        if 'Face could not be detected' in str(e):
+                            st.error("❌ Aucun visage détecté. Veuillez vous assurer que la photo est bien centrée sur un visage clairement visible.")
+                        else:
+                            st.error(f"Erreur lors de la reconnaissance : {e}")
 
         elif choice == "Charger une photo depuis le disque":
             image_file = st.file_uploader("Téléchargez une photo", type=["jpg", "jpeg", "png"])
-            if not name:
-                st.error("❌ Veuillez entrer un nom avant de télécharger la photo.")
-            elif image_file and name:
-                image = Image.open(image_file).convert("RGB")
-                img_path = os.path.join(save_path, f"{name}.jpg")
-                image.save(img_path)
-                try:
-                    embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
-                    
-                    # Adapter dynamiquement le nombre de colonnes
-                    if df.empty:
-                        columns = ["name"] + [f"e{i}" for i in range(len(embedding))]
-                        df = pd.DataFrame(columns=columns)
-                    
-                    new_data = pd.DataFrame([[name] + embedding], columns=df.columns)
-                    df = pd.concat([df, new_data], ignore_index=True)
-                    df.to_csv(csv_file, index=False)
-                    st.success(f"Encodage sauvegardé pour {name}")
-                except Exception as e:
-                    if 'Face could not be detected' in str(e):
-                        st.error("❌ Aucun visage détecté. Veuillez vous assurer que la photo est bien centrée sur un visage clairement visible.")
-                    else:
-                        st.error(f"Erreur lors de la reconnaissance : {e}")
+    
+            if image_file:
+                if not name:
+                    st.warning("❌ Veuillez entrer un nom avant de télécharger la photo.")
+                else:
+                    image = Image.open(image_file).convert("RGB")
+                    img_path = os.path.join(save_path, f"{name}.jpg")
+                    image.save(img_path)
+                    try:
+                        embedding = DeepFace.represent(img_path=img_path, model_name="VGG-Face", detector_backend="mtcnn")[0]["embedding"]
 
-# Onglet "Reconnaissance" (accessible sans connexion)
+                        if df.empty:
+                            columns = ["name"] + [f"e{i}" for i in range(len(embedding))]
+                            df = pd.DataFrame(columns=columns)
+
+                        new_data = pd.DataFrame([[name] + embedding], columns=df.columns)
+                        df = pd.concat([df, new_data], ignore_index=True)
+                        df.to_csv(csv_file, index=False)
+                        st.success(f"✅ Encodage sauvegardé pour {name}")
+                    except Exception as e:
+                        if 'Face could not be detected' in str(e):
+                            st.error("❌ Aucun visage détecté. Veuillez vous assurer que la photo est bien centrée sur un visage clairement visible.")
+                        else:
+                            st.error(f"Erreur lors de la reconnaissance : {e}")
+
+
 with tab2:
     st.header("Reconnaissance Faciale")
-    
-    # Chargement de la liste de présence
     presence_file = get_presence_file()
 
-    # Vérifiez si le fichier de présence existe, sinon créez un dataframe vide
     if os.path.exists(presence_file):
         presence_df = pd.read_excel(presence_file)
     else:
-        # Initialiser presence_df si il n'existe pas
         presence_df = pd.DataFrame(columns=["name", "Heure", "Present"])
 
-    # Affichage de la caméra
     test_image = st.camera_input("Prenez une photo pour la reconnaissance")
 
     if test_image is not None:
@@ -201,14 +182,12 @@ with tab2:
 
             if min_distance < 0.68:
                 st.success(f"✅ Bienvenue {recognized_name}")
-                
-                # Enregistrer la présence
                 if recognized_name not in presence_df["name"].values:
-                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
                     new_entry = pd.DataFrame([[recognized_name, now, "Oui"]], columns=["name", "Heure", "Present"])
                     presence_df = pd.concat([presence_df, new_entry], ignore_index=True)
                     presence_df.to_excel(presence_file, index=False)
-                    st.write(f"Présence enregistrée pour {recognized_name} à {now}")
+                    st.write(f"Présence enregistrée pour {recognized_name} le {now}")
                 else:
                     st.warning(f"{recognized_name} est déjà enregistré.")
             else:
@@ -219,7 +198,6 @@ with tab2:
             else:
                 st.error(f"Erreur lors de la reconnaissance : {e}")
 
-    # 🔽 Téléchargement de la feuille de présence
     if not presence_df.empty:
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
